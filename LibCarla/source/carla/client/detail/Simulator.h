@@ -31,6 +31,7 @@ namespace client {
   class BlueprintLibrary;
   class Map;
   class Sensor;
+  class WalkerAIController;
 
 namespace detail {
 
@@ -177,6 +178,14 @@ namespace detail {
     rpc::VehiclePhysicsControl GetVehiclePhysicsControl(const Vehicle &vehicle) const {
       return _client.GetVehiclePhysicsControl(vehicle.GetId());
     }
+
+    /// @}
+    // =========================================================================
+    /// @name AI
+    // =========================================================================
+    /// @{
+
+    void RegisterAIController(const WalkerAIController &controller);
 
     /// @}
     // =========================================================================

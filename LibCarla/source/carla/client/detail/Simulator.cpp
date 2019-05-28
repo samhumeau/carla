@@ -13,6 +13,8 @@
 #include "carla/client/Map.h"
 #include "carla/client/Sensor.h"
 #include "carla/client/TimeoutException.h"
+#include "carla/client/WalkerAIController.h"
+#include "carla/client/detail/ActorFactory.h"
 #include "carla/sensor/Deserializer.h"
 
 #include <exception>
@@ -115,6 +117,22 @@ namespace detail {
 
   SharedPtr<Actor> Simulator::GetSpectator() {
     return MakeActor(_client.GetSpectator());
+  }
+
+  // ===========================================================================
+  // -- AI ---------------------------------------------------------------------
+  // ===========================================================================
+
+  void Simulator::RegisterAIController(const WalkerAIController &controller) {
+    auto walker = controller.GetParent();
+    if (walker == nullptr) {
+      throw_exception(std::runtime_error(controller.GetDisplayId() + ": not attached to walker"));
+      return;
+    }
+    DEBUG_ASSERT(_episode != nullptr);
+    auto navigation = _episode->CreateNavigationIfMissing();
+    DEBUG_ASSERT(navigation != nullptr);
+    navigation->RegisterWalker(walker->GetId(), controller.GetId());
   }
 
   // ===========================================================================
