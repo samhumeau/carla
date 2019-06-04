@@ -188,6 +188,8 @@ namespace detail {
 
     void RegisterAIController(const WalkerAIController &controller);
 
+    geom::Location GetRandomLocationFromNavigation();
+
     std::shared_ptr<WalkerNavigation> GetNavigation() {
       return _episode->GetNavigation();
     }
