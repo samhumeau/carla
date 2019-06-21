@@ -24,6 +24,7 @@
 #include "carla/rpc/TrafficLightState.h"
 
 #include <memory>
+#include <mutex>
 
 namespace carla {
 namespace client {
@@ -74,13 +75,16 @@ namespace detail {
     // =========================================================================
     /// @{
 
+    EpisodeProxy GetCurrentEpisode() {
+      std::call_once(_init_flag, [this]() { InitializeConnection(); });
+      return EpisodeProxy{shared_from_this()};
+    }
+
     /// @pre Cannot be called previous to GetCurrentEpisode.
     auto GetCurrentEpisodeId() const {
       DEBUG_ASSERT(_episode != nullptr);
       return _episode->GetId();
     }
-
-    EpisodeProxy GetCurrentEpisode();
 
     /// @}
     // =========================================================================
@@ -433,9 +437,15 @@ namespace detail {
 
   private:
 
-    Client _client;
+    void InitializeConnection();
 
-    std::shared_ptr<Episode> _episode;
+    std::once_flag _init_flag;
+
+    // The order of these two arguments is very important.
+
+    EpisodeHolder _episode_holder;
+
+    Client _client;
 
     GarbageCollectionPolicy _gc_policy;
   };

@@ -77,18 +77,6 @@ namespace detail {
   // -- Access to current episode ----------------------------------------------
   // ===========================================================================
 
-  EpisodeProxy Simulator::GetCurrentEpisode() {
-    if (_episode == nullptr) {
-      ValidateVersions(_client);
-      _episode = std::make_shared<Episode>(_client);
-      _episode->Listen();
-      if (!GetEpisodeSettings().synchronous_mode) {
-        WaitForTick(_client.GetTimeout());
-      }
-    }
-    return EpisodeProxy{shared_from_this()};
-  }
-
   SharedPtr<Map> Simulator::GetCurrentMap() {
     return MakeShared<Map>(_client.GetMapInfo());
   }
@@ -220,6 +208,20 @@ namespace detail {
 
   void Simulator::UnSubscribeFromSensor(const Sensor &sensor) {
     _client.UnSubscribeFromStream(sensor.GetActorDescription().GetStreamToken());
+  }
+
+  // ===========================================================================
+  // -- Private methods --------------------------------------------------------
+  // ===========================================================================
+
+  void Simulator::InitializeConnection() {
+    ValidateVersions(_client);
+    _episode_holder.InitializeEpisode(_client);
+    // If we're not in sync mode, wait for a tick so we have a valid state
+    // before returning.
+    if (!GetEpisodeSettings().synchronous_mode) {
+      WaitForTick(_client.GetTimeout());
+    }
   }
 
 } // namespace detail

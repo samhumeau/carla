@@ -23,78 +23,30 @@ namespace carla {
 namespace client {
 namespace detail {
 
-  class Client;
-  class WalkerNavigation;
-
-  /// Holds the current episode, and the current episode state.
-  ///
-  /// The episode state changes in the background each time a world tick is
-  /// received. The episode may change with any background update if the
-  /// simulator has loaded a new episode.
-  class Episode
-    : public std::enable_shared_from_this<Episode>,
-      private NonCopyable {
+  class Episode : private NonCopyable {
   public:
 
-    explicit Episode(Client &client);
+    CachedActorList &GetCachedActors();
 
-    ~Episode();
-
-    void Listen();
-
-    auto GetId() const {
-      return GetState()->GetEpisodeId();
-    }
-
-    std::shared_ptr<const EpisodeState> GetState() const {
-      return _state.load();
-    }
-
-    std::shared_ptr<WalkerNavigation> CreateNavigationIfMissing();
-
-    std::shared_ptr<WalkerNavigation> GetNavigation() const {
-      auto nav = _navigation.load();
-      DEBUG_ASSERT(nav != nullptr);
-      return nav;
-    }
-
-    void RegisterActor(rpc::Actor actor) {
-      _actors.Insert(std::move(actor));
-    }
-
-    boost::optional<rpc::Actor> GetActorById(ActorId id);
-
-    std::vector<rpc::Actor> GetActorsById(const std::vector<ActorId> &actor_ids);
-
-    std::vector<rpc::Actor> GetActors();
-
-    boost::optional<WorldSnapshot> WaitForState(time_duration timeout) {
-      return _snapshot.WaitFor(timeout);
-    }
-
-    void RegisterOnTickEvent(std::function<void(WorldSnapshot)> callback) {
+    void RegisterOnTickCallback(std::function<void(WorldSnapshot)> &&callback) {
       _on_tick_callbacks.RegisterCallback(std::move(callback));
+    }
+
+    void Tick(WorldSnapshot state) {
+      _on_tick_callbacks.Call(state);
+    }
+
+    void TickOutdated(WorldSnapshot state) {
+      _on_tick_callbacks.Call(state);
     }
 
   private:
 
-    Episode(Client &client, const rpc::EpisodeInfo &info);
-
-    void OnEpisodeStarted();
-
-    Client &_client;
-
-    AtomicSharedPtr<const EpisodeState> _state;
-
-    AtomicSharedPtr<WalkerNavigation> _navigation;
+    WalkerNavigation _navigation;
 
     CachedActorList _actors;
 
     CallbackList<WorldSnapshot> _on_tick_callbacks;
-
-    RecurrentSharedFuture<WorldSnapshot> _snapshot;
-
-    const streaming::Token _token;
   };
 
 } // namespace detail
