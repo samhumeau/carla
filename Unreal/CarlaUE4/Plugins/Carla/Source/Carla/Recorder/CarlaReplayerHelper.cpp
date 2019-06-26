@@ -154,10 +154,12 @@ std::pair<int, uint32_t> CarlaReplayerHelper::ProcessReplayerEventAdd(
     FVector Location,
     FVector Rotation,
     CarlaRecorderActorDescription Description,
-    uint32_t DesiredId)
+    uint32_t DesiredId,
+    bool bIgnoreHero)
 {
   check(Episode != nullptr);
   FActorDescription ActorDesc;
+  bool IsHero = false;
 
   // prepare actor description
   ActorDesc.UId = Description.UId;
@@ -169,6 +171,9 @@ std::pair<int, uint32_t> CarlaReplayerHelper::ProcessReplayerEventAdd(
     Attr.Id = Item.Id;
     Attr.Value = Item.Value;
     ActorDesc.Variations.Add(Attr.Id, std::move(Attr));
+    // check for hero
+    if (Item.Id == "role_name" && Item.Value == "hero")
+      IsHero = true;
   }
 
   auto result = TryToCreateReplayerActor(Location, Rotation, ActorDesc, DesiredId);
@@ -178,10 +183,19 @@ std::pair<int, uint32_t> CarlaReplayerHelper::ProcessReplayerEventAdd(
     // disable physics and autopilot on vehicles
     if (result.second.GetActorType() == FActorView::ActorType::Vehicle)
     {
-      // disable physics
-      SetActorSimulatePhysics(result.second, false);
-      // disable autopilot
-      SetActorAutopilot(result.second, false, false);
+      // ignore hero ?
+      if (!(bIgnoreHero && IsHero))
+      {
+        // disable physics
+        SetActorSimulatePhysics(result.second, false);
+        // disable autopilot
+        SetActorAutopilot(result.second, false, false);
+      }
+      else
+      {
+        // reenable physics just in case
+        SetActorSimulatePhysics(result.second, true);
+      }
     }
   }
 
@@ -339,19 +353,23 @@ void CarlaReplayerHelper::ProcessReplayerAnimWalker(CarlaRecorderAnimWalker Walk
 }
 
 // replay finish
-bool CarlaReplayerHelper::ProcessReplayerFinish(bool bApplyAutopilot)
+bool CarlaReplayerHelper::ProcessReplayerFinish(bool bApplyAutopilot, bool bIgnoreHero, std::unordered_map<uint32_t, bool> &IsHero)
 {
   // set autopilot and physics to all AI vehicles
   auto registry = Episode->GetActorRegistry();
   for (auto ActorView : registry)
   {
-    // enable physics only on vehicles
-    if (ActorView.GetActorType() == FActorView::ActorType::Vehicle)
+    // check for hero
+    if (!(bIgnoreHero && IsHero[ActorView.GetActorId()]))
     {
-      SetActorSimulatePhysics(ActorView, true);
-      // autopilot
-      if (bApplyAutopilot)
-        SetActorAutopilot(ActorView, true, true);
+      // enable physics only on vehicles
+      if (ActorView.GetActorType() == FActorView::ActorType::Vehicle)
+      {
+        SetActorSimulatePhysics(ActorView, true);
+        // autopilot
+        if (bApplyAutopilot)
+          SetActorAutopilot(ActorView, true, true);
+      }
     }
   }
   return true;

@@ -1,5 +1,5 @@
 ## Latest
-
+  * Added an option (-i) when replaying a session to ignore the hero vehicles (whose are not replayed).
   * Bugfix about recorder query system
   * Fixed problem when vehicles enable autopilot after a replayer, now it works better.
   * Vulkan support: Changed project settings to make vulkan default on linux and updated make script to allow user to select opengl
