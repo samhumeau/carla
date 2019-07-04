@@ -69,7 +69,7 @@ _For the sake of simplicity we're not going to take into account all the edge
 cases, nor it will be implemented in the most efficient way. This is just an
 illustrative example._
 
-#### 1. The sensor actor
+### 1. The sensor actor
 
 This is the most complicated class we're going to create. Here we're running
 inside Unreal Engine framework, knowledge of UE4 API will be very helpful but
@@ -131,7 +131,7 @@ public:
 private:
 
   UPROPERTY()
-  UBoxComponent *TriggerBox = nullptr;
+  UBoxComponent *Box = nullptr;
 };
 ```
 
@@ -154,10 +154,10 @@ unnecessary ticks
 ASafeDistanceSensor::ASafeDistanceSensor(const FObjectInitializer &ObjectInitializer)
   : Super(ObjectInitializer)
 {
-  TriggerBox = CreateDefaultSubobject<UBoxComponent>(TEXT("TriggerBox"));
-  TriggerBox->SetupAttachment(RootComponent);
-  TriggerBox->SetHiddenInGame(true);
-  TriggerBox->SetCollisionProfileName(FName("OverlapAll"));
+  Box = CreateDefaultSubobject<UBoxComponent>(TEXT("BoxOverlap"));
+  Box->SetupAttachment(RootComponent);
+  Box->SetHiddenInGame(true);
+  Box->SetCollisionProfileName(FName("OverlapAll"));
 
   PrimaryActorTick.bCanEverTick = true;
 }
@@ -228,19 +228,228 @@ void ASafeDistanceSensor::Set(const FActorDescription &Description)
   float ExtentX = M_TO_CM * (Front + Back) / 2.0f;
   float ExtentY = M_TO_CM * Lateral;
 
-  TriggerBox->SetComponentLocation(FVector{LocationX, 0.0f, 0.0f});
-  TriggerBox->SetBoxExtent(FVector{ExtentX, ExtentY, 40.0f});
+  Box->SetComponentLocation(FVector{LocationX, 0.0f, 0.0f});
+  Box->SetBoxExtent(FVector{ExtentX, ExtentY, 40.0f});
 }
 ```
 
 Note that the set function is called before UE4's `BeginPlay`, we won't use
 this virtual function here, but it's important for other sensors.
 
+Now we're going to extend the box volume based on the bounding box of the actor
+that we're attached to. For that, the most convenient method is to use the
+`SetOwner` virtual function. This function is called when our sensor is attached
+to another actor.
 
+```cpp
+void ASafeDistanceSensor::SetOwner(AActor *Owner)
+{
+  Super::SetOwner(Owner);
 
-Another useful notification is `SetOwner(AActor *Owner)`.
+  auto BoundingBox = UBoundingBoxCalculator::GetActorBoundingBox(Owner);
 
+  Box->SetBoxExtent(BoundingBox.Extent + Box->GetUnscaledBoxExtent());
+}
+```
 
+The only thing left to do is the actual measurement, for that we'll use the
+`Tick` function. We're going to look for all the vehicles currently overlapping
+our box, and we'll send this list to client
+
+```cpp
+void ASafeDistanceSensor::Tick(float DeltaSeconds)
+{
+  Super::Tick(DeltaSeconds);
+
+  TSet<AActor *> DetectedActors;
+  Box->GetOverlappingActors(DetectedActors, ACarlaWheeledVehicle::StaticClass());
+  DetectedActors.Remove(GetOwner()); // Do not report own vehicle.
+
+  auto Stream = GetDataStream(*this);
+
+  Stream.Send(*this, GetEpisode(), DetectedActors);
+}
+```
+
+!!! note
+    In production-ready sensors, the `Tick` function should be very optimized,
+    specially if the sensor sends big chunks of data. This function is called
+    every update in the game thread thus significantly affects the performance
+    of the simulator.
+
+Ok, a couple of things going on here that we haven't mentioned yet, what's this
+stream?
+
+Every sensor has a data stream associated. This stream is used to send data down
+to the client, and this is the stream you subscribe to when you use the
+`sensor.listen(callback)` method in the Python API. Every time you send here
+some data, the callback on the client-side is going to be triggered. But before
+that, the data is going to travel through several layers. First of them, will be
+the serializer we have to create next. We'll fully understand this part once we
+have completed the `Serialize` function in the next section.
+
+### 2. The sensor data serializer
+
+This class is actually rather simple, it's only required to have two static
+methods, `Serialize` and `Deserialize`. We'll add two files for it, this time to
+LibCarla
+
+  * `LibCarla/source/carla/sensor/s11n/SafeDistanceSerializer.h`
+  * `LibCarla/source/carla/sensor/s11n/SafeDistanceSerializer.cpp`
+
+Let's start with the `Serialize` function. This function is going to receive as
+arguments whatever we pass to the `Stream.Send(...)` function, with the only
+condition that the first argument has to be a sensor and it has to return a
+buffer.
+
+```cpp
+static Buffer Serialize(const Sensor &, ...);
+```
+
+A `carla::Buffer` is just a dynamically allocated piece of raw memory with some
+convenient functionality, that we're going to use to send raw data to the
+client.
+
+In this example, we need to write the list of detected actors to a buffer in a
+way that it can be meaningful in the client-side. That's why we passed the
+episode object to this function.
+
+The `UCarlaEpisode` class represent the current _episode_ running in the
+simulator, i.e. the state of the simulation since last time we loaded a map. It
+contains all the relevant information to Carla, among other things, it allows
+searching for actor IDs. We can send these IDs to the client and the client will
+be able to recognise these as actors
+
+```cpp
+template <typename SensorT>
+static Buffer Serialize(
+    const SensorT &,
+    const UCarlaEpisode &episode,
+    const TSet<AActor *> &detected_actors) {
+  const uint32_t size_in_bytes = sizeof(ActorId) * detected_actors.Num();
+  Buffer buffer{size_in_bytes};
+  unsigned char *it = buffer.data();
+  for (auto *actor : detected_actors) {
+    ActorId id = episode.Find(actor).GetActorId();
+    std::memcpy(it, &id, sizeof(ActorId));
+    it += sizeof(ActorId);
+  }
+  return buffer;
+}
+```
+
+This buffer we're returning is going to come back to us, except that this time
+in the client-side, in the `Deserialize` function packed in a `RawData` object
+
+```cpp
+static SharedPtr<SensorData> Deserialize(RawData &&data);
+```
+
+We'll implement this method in the cpp file, and it's rather simple
+
+```cpp
+SharedPtr<SensorData> SafeDistanceSerializer::Deserialize(RawData &&data) {
+  return SharedPtr<SensorData>(new SafeDistanceEvent(std::move(data)));
+}
+```
+
+except for the fact that we haven't defined yet what's a `SafeDistanceEvent`.
+
+### 3. The sensor data object
+
+We need to create a data object for the users of this sensor, representing the
+data of a _safe distance event_.
+
+This object is going to be equivalent to a list of actor IDs. For that, we'll
+derive from the Array template
+
+```cpp
+#pragma once
+
+#include "carla/rpc/ActorId.h"
+#include "carla/sensor/data/Array.h"
+
+namespace carla {
+namespace sensor {
+namespace data {
+
+  class SafeDistanceEvent : public Array<rpc::ActorId> {
+  public:
+
+    explicit SafeDistanceEvent(RawData &&data)
+      : Array<rpc::ActorId>(std::move(data)) {}
+  };
+
+} // namespace data
+} // namespace sensor
+} // namespace carla
+```
+
+The Array template is going to reinterpret the buffer we created in the
+`Serialize` method as an array of actor IDs, and it's able to do directly from
+the buffer we received, without allocating any new memory. Although for this
+small example may seem a bit overkill, this mechanism is also used for big
+chunks of data; imagine the data being a HD image, we save a lot by reusing the
+raw memory.
+
+Now we need to expose this class to Python. In our example, we haven't add any
+extra methods, so we'll just expose the methods related to Array. We do so by
+using Boost.Python bindings, add the following to
+_PythonAPI/carla/source/libcarla/SensorData.cpp_.
+
+```cpp
+class_<
+    csd::SafeDistanceEvent,
+    bases<cs::SensorData>,
+    boost::noncopyable,
+    boost::shared_ptr<csd::SafeDistanceEvent>>("SafeDistanceEvent", no_init)
+  .def("__len__", &csd::SafeDistanceEvent::size)
+  .def("__iter__", iterator<csd::SafeDistanceEvent>())
+  .def("__getitem__", +[](const csd::SafeDistanceEvent &self, size_t pos) -> cr::ActorId {
+    return self.at(pos);
+  })
+  .def(self_ns::str(self_ns::self))
+;
+```
+
+Note that `csd` is an alias for the namespace `carla::sensor::data`.
+
+What we're doing here is exposing some C++ methods in Python. Just with this,
+the Python API will be able to recognise our new event and it'll behave similar
+to an array in Python, except that cannot be modified.
+
+### 4. Register your sensor
+
+Now that the pipeline is complete, we're ready to register our new sensor. We do
+so in _LibCarla/source/carla/sensor/SensorRegistry.h_. Follow the instruction in
+this header file to add the different includes and forward declaration, and add
+the following pair to the registry
+
+```cpp
+std::pair<ASafeDistanceSensor *, s11n::SafeDistanceSerializer>
+```
+
+With this, the sensor registry now can do its compile-time magic to dispatch the
+right data to the right serializer.
+
+### 5. Usage example
+
+With this object, we can simply do, e.g.
+
+```cpp
+void callback(SharedPtr<SensorData> data) {
+  auto event = boost::static_pointer_cast<SafeDistanceEvent>(data);
+
+  std::cout << "Safe distance breached at << event.GetTimestamp()
+            << " (frame " << event.GetFrame() << ")\n";
+  for (ActorId id : event) {
+    std::cout << "  - Actor ID: " << id << " inside safe distance.\n";
+  }
+}
+```
+
+- - -
+- - -
 - - -
 
 Create a sensor actor deriving from `ASensor` (or one of its derived classes),
@@ -389,5 +598,7 @@ And that's it, the sensor registry now do its compile-time magic to dispatch the
 right data to the right serializer.
 
 ## Appendix: Reusing buffers
+
+## Appendix: Sending data asynchronously
 
 ## Appendix: Client-side sensors
