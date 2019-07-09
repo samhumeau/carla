@@ -1,4 +1,4 @@
-## Latest
+## CARLA 0.9.6
 
   * Add access to vehicle transmission details
   * Add access to vehicle physics brake values
