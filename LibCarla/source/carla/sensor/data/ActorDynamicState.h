@@ -12,6 +12,7 @@
 #include "carla/rpc/TrafficLightState.h"
 #include "carla/rpc/VehicleControl.h"
 #include "carla/rpc/WalkerControl.h"
+#include "carla/rpc/WalkerKeypoints.h"
 
 #include <cstdint>
 
@@ -102,6 +103,8 @@ namespace detail {
     uint32_t pole_index;
   };
 #pragma pack(pop)
+
+
 } // namespace detail
 
 #pragma pack(push, 1)
@@ -124,16 +127,24 @@ namespace detail {
       detail::VehicleData vehicle_data;
       detail::PackedWalkerControl walker_control;
     } state;
+
+    union Keypoints {
+      rpc::WalkerKeypoints walker_key_points;
+      detail::VehicleData vehicle_key_points;
+
+      Keypoints() {}
+    } keypoints;
+
   };
 
 #pragma pack(pop)
 
-static_assert(
-    sizeof(ActorDynamicState) == 93u,
-    "Invalid ActorDynamicState size! "
-    "If you modified this class please update the size here, else you may "
-    "comment this assert, but your platform may have compatibility issues "
-    "connecting to other platforms.");
+// static_assert(
+//     sizeof(ActorDynamicState) == 204u,
+//     "Invalid ActorDynamicState size! "
+//     "If you modified this class please update the size here, else you may "
+//     "comment this assert, but your platform may have compatibility issues "
+//     "connecting to other platforms.");
 
 } // namespace data
 } // namespace sensor

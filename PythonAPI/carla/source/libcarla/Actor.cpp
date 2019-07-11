@@ -109,6 +109,7 @@ void export_actor() {
       .def("apply_control", &ApplyControl<cr::WalkerControl>, (arg("control")))
       .def("apply_control", &ApplyControl<cr::WalkerBoneControl>, (arg("control")))
       .def("get_control", &cc::Walker::GetWalkerControl)
+      .def("get_keypoints", &cc::Walker::GetWalkerKeypoints)
       .def(self_ns::str(self_ns::self))
   ;
 

@@ -103,6 +103,8 @@ void AWalkerController::SetManualBones(const bool bIsEnabled)
       UPoseableMeshComponent *PoseableMesh = PoseableMeshes.IsValidIndex(0) ? PoseableMeshes[0] : nullptr;
       PoseableMesh->SetVisibility(false);
       SkeletalMesh->SetVisibility(true);
+      FName BoneName = FName("crl_arm__R");
+      UE_LOG(LogCarla, Warning, TEXT("222--> Bone's location is %s"), *PoseableMesh->GetBoneLocationByName(BoneName, EBoneSpaces::Type::ComponentSpace).ToString());
     }
   }
 }
@@ -137,6 +139,8 @@ void AWalkerController::ControlTickVisitor::operator()(FWalkerBoneControl &Walke
     {
       FName BoneName = FName(*pair.Key);
       PoseableMesh->SetBoneTransformByName(BoneName, pair.Value, EBoneSpaces::Type::ComponentSpace);
+      UE_LOG(LogCarla, Warning, TEXT("Bone's location is %s"), *PoseableMesh->GetBoneLocationByName(BoneName, EBoneSpaces::Type::ComponentSpace).ToString());
+      UE_LOG(LogCarla, Warning, TEXT("Bone name %s"), *BoneName.ToString());
     }
     WalkerBoneControl.BoneTransforms.Empty();
   }

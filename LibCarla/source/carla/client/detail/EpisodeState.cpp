@@ -28,7 +28,8 @@ namespace detail {
               actor.velocity,
               actor.angular_velocity,
               actor.acceleration,
-              actor.state});
+              actor.state,
+              actor.keypoints});
       DEBUG_ASSERT(result.second);
     }
   }

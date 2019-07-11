@@ -9,6 +9,7 @@
 #include "carla/client/Actor.h"
 #include "carla/rpc/WalkerControl.h"
 #include "carla/rpc/WalkerBoneControl.h"
+#include "carla/rpc/WalkerKeypoints.h"
 
 namespace carla {
 namespace client {
@@ -18,6 +19,7 @@ namespace client {
 
     using Control = rpc::WalkerControl;
     using BoneControl = rpc::WalkerBoneControl;
+    using Keypoints = rpc::WalkerKeypoints;
 
     explicit Walker(ActorInitializer init) : Actor(std::move(init)) {}
 
@@ -33,6 +35,12 @@ namespace client {
     /// @note This function does not call the simulator, it returns the Control
     /// received in the last tick.
     Control GetWalkerControl() const;
+
+    /// Return the control last applied to this Walker.
+    ///
+    /// @note This function does not call the simulator, it returns the Control
+    /// received in the last tick.
+    Keypoints GetWalkerKeypoints() const;
 
   private:
 

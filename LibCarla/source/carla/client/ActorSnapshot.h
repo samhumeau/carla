@@ -21,6 +21,7 @@ namespace client {
     geom::Vector3D angular_velocity;
     geom::Vector3D acceleration;
     sensor::data::ActorDynamicState::TypeDependentState state;
+    sensor::data::ActorDynamicState::Keypoints keypoints;
   };
 
 } // namespace client

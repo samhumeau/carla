@@ -346,7 +346,7 @@ unset RECAST_BASENAME
 # -- Generate Version.h --------------------------------------------------------
 # ==============================================================================
 
-CARLA_VERSION=$(get_git_repository_version)
+CARLA_VERSION="0.9.5" # $(get_git_repository_version)
 
 log "CARLA version ${CARLA_VERSION}."
 

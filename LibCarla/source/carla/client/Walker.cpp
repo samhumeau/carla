@@ -25,5 +25,10 @@ namespace client {
   Walker::Control Walker::GetWalkerControl() const {
     return GetEpisode().Lock()->GetActorSnapshot(*this).state.walker_control;
   }
+
+  Walker::Keypoints Walker::GetWalkerKeypoints() const {
+    // Cast to rpc::Keypoints using the cast operator
+    return GetEpisode().Lock()->GetActorSnapshot(*this).keypoints.walker_key_points;
+  }
 } // namespace client
 } // namespace carla
