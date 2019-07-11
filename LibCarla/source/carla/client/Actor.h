@@ -10,6 +10,7 @@
 #include "carla/Memory.h"
 #include "carla/client/detail/ActorState.h"
 #include "carla/profiler/LifetimeProfiled.h"
+#include "carla/rpc/Keypoints.h"
 
 namespace carla {
 namespace client {
@@ -57,6 +58,8 @@ namespace client {
     /// @note This function does not call the simulator, it returns the
     /// acceleration calculated after the actor's velocity.
     geom::Vector3D GetAcceleration() const;
+
+    rpc::Keypoints GetKeypoints() const;
 
     /// Teleport the actor to @a location.
     void SetLocation(const geom::Location &location);

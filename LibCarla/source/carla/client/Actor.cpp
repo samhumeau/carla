@@ -8,6 +8,7 @@
 
 #include "carla/Logging.h"
 #include "carla/client/detail/Simulator.h"
+#include <stdio.h>
 
 namespace carla {
 namespace client {
@@ -34,6 +35,10 @@ namespace client {
 
   geom::Vector3D Actor::GetAcceleration() const {
     return GetEpisode().Lock()->GetActorAcceleration(*this);
+  }
+
+  rpc::Keypoints Actor::GetKeypoints() const {
+    return GetEpisode().Lock()->GetActorSnapshot(*this).keypoints;
   }
 
   void Actor::SetLocation(const geom::Location &location) {

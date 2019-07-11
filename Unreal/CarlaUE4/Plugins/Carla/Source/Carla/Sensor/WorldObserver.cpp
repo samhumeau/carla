@@ -82,41 +82,27 @@ static auto FWorldObserver_GetActorState(const FActorView &View, const FActorReg
   return state;
 }
 
-
 static auto FWorldObserver_GetActorKeyPoints(const FActorView &View, const FActorRegistry &Registry)
 {
-  carla::sensor::data::ActorDynamicState::Keypoints keypoints;
-
-  using AType = FActorView::ActorType;
-  if (AType::Walker == View.GetActorType())
+  carla::sensor::data::detail::PackedKeypoints keypoints;
+  auto Pawn = Cast<APawn>(View.GetActor());
+  if (Pawn != nullptr)
   {
-    auto Walker = Cast<APawn>(View.GetActor());
-    UE_LOG(LogCarla, Warning, TEXT("Log1"));
-    if (Walker != nullptr)
+    TArray<USkeletalMeshComponent *> SkeletalMeshes;
+    Pawn->GetComponents<USkeletalMeshComponent>(SkeletalMeshes, false);
+    USkeletalMeshComponent *SkeletalMesh = SkeletalMeshes.IsValidIndex(0) ? SkeletalMeshes[0] : nullptr;
+
+    if (SkeletalMesh)
     {
-      UE_LOG(LogCarla, Warning, TEXT("Log2"));
-      TArray<USkeletalMeshComponent *> SkeletalMeshes;
-      Walker->GetComponents<USkeletalMeshComponent>(SkeletalMeshes, false);
-      USkeletalMeshComponent *SkeletalMesh = SkeletalMeshes.IsValidIndex(0) ? SkeletalMeshes[0] : nullptr;
-
-      if (SkeletalMesh)
-      {
-          int32 NumBones = SkeletalMesh->GetNumBones();
-          for (int32 i = 0; i < NumBones; ++i)
-          {
-            FName const BoneName = SkeletalMesh->GetBoneName(i);
-            UE_LOG(LogCarla, Warning,TEXT("Bone: %s"), *BoneName.ToString());
-            std::string key = std::string(TCHAR_TO_UTF8(*BoneName.ToString()));
-            FVector location = SkeletalMesh->GetBoneLocation(BoneName, EBoneSpaces::Type::WorldSpace);
-            carla::geom::Vector3D  val = {location.X, location.Y, location.Z};
-            UE_LOG(LogCarla, Warning, TEXT("Bone's location is %s"), *SkeletalMesh->GetBoneLocation(BoneName, EBoneSpaces::Type::WorldSpace).ToString());
-        	}
-
-      }
-      UE_LOG(LogCarla, Warning, TEXT("Log4"));
-      keypoints.walker_key_points.crl_root = {0.2f, 0.3f, -0.7f};
+        int32 NumBones = SkeletalMesh->GetNumBones();
+        for (int32 i = 0; i < NumBones; ++i)
+        {
+          FName const BoneName = SkeletalMesh->GetBoneName(i);
+          std::string key = std::string(TCHAR_TO_UTF8(*BoneName.ToString()));
+          FVector location = SkeletalMesh->GetBoneLocation(BoneName, EBoneSpaces::Type::WorldSpace);
+          keypoints.addKeypoint(key, location.X, location.Y, location.Z);
+      	}
     }
-
   }
   return keypoints;
 }
@@ -182,7 +168,7 @@ static carla::Buffer FWorldObserver_Serialize(
       FWorldObserver_GetAngularVelocity(*View.GetActor()),
       FWorldObserver_GetAcceleration(View, Velocity, DeltaSeconds),
       FWorldObserver_GetActorState(View, Registry),
-      {FWorldObserver_GetActorKeyPoints(View, Registry)}
+      FWorldObserver_GetActorKeyPoints(View, Registry)
     };
     write_data(info);
   }

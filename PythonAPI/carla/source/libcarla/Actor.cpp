@@ -10,6 +10,7 @@
 #include <carla/client/Walker.h>
 #include <carla/client/WalkerAIController.h>
 #include <carla/rpc/TrafficLightState.h>
+#include <carla/rpc/Keypoints.h>
 
 #include <boost/python/suite/indexing/vector_indexing_suite.hpp>
 
@@ -23,6 +24,11 @@ namespace client {
     out << "Actor(id=" << actor.GetId() << ", type=" << actor.GetTypeId() << ')';
     return out;
   }
+
+  // std::ostream &operator<<(std::ostream &out, const carla::rpc::Keypoints &keypoints) {
+  //   out << "Keypoints(keypoints(" << keypoints.keypoints.size() << "))";
+  //   return out;
+  // }
 
 } // namespace client
 } // namespace carla
@@ -49,6 +55,18 @@ static void ApplyControl(carla::client::Walker &self, const ControlT &control) {
   self.ApplyControl(control);
 }
 
+static auto GetKeypoints(const carla::rpc::Keypoints &self) {
+  namespace py = boost::python;
+  auto keypoints = self.keypoints;
+  py::list result;
+  for (auto kp : keypoints) {
+    auto name = kp.first;
+    auto location = kp.second;
+    result.append(py::make_tuple(name, location));
+  }
+  return result;
+}
+
 void export_actor() {
   using namespace boost::python;
   namespace cc = carla::client;
@@ -57,6 +75,11 @@ void export_actor() {
   class_<std::vector<int>>("vector_of_ints")
       .def(vector_indexing_suite<std::vector<int>>())
       .def(self_ns::str(self_ns::self))
+  ;
+
+  class_<cr::Keypoints>("Keypoints")
+    .def(init<>())
+    .add_property("keypoints", &GetKeypoints)
   ;
 
   class_<cc::Actor, boost::noncopyable, boost::shared_ptr<cc::Actor>>("Actor", no_init)
@@ -78,6 +101,7 @@ void export_actor() {
       .def("get_transform", &cc::Actor::GetTransform)
       .def("get_velocity", &cc::Actor::GetVelocity)
       .def("get_angular_velocity", &cc::Actor::GetAngularVelocity)
+      .def("get_keypoints", &cc::Actor::GetKeypoints)
       .def("get_acceleration", &cc::Actor::GetAcceleration)
       .def("set_location", &cc::Actor::SetLocation, (arg("location")))
       .def("set_transform", &cc::Actor::SetTransform, (arg("transform")))
@@ -109,7 +133,6 @@ void export_actor() {
       .def("apply_control", &ApplyControl<cr::WalkerControl>, (arg("control")))
       .def("apply_control", &ApplyControl<cr::WalkerBoneControl>, (arg("control")))
       .def("get_control", &cc::Walker::GetWalkerControl)
-      .def("get_keypoints", &cc::Walker::GetWalkerKeypoints)
       .def(self_ns::str(self_ns::self))
   ;
 

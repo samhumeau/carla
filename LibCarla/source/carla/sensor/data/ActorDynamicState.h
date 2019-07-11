@@ -12,9 +12,10 @@
 #include "carla/rpc/TrafficLightState.h"
 #include "carla/rpc/VehicleControl.h"
 #include "carla/rpc/WalkerControl.h"
-#include "carla/rpc/WalkerKeypoints.h"
+#include "carla/rpc/Keypoints.h"
 
 #include <cstdint>
+#include <stdio.h>
 
 namespace carla {
 namespace sensor {
@@ -104,6 +105,54 @@ namespace detail {
   };
 #pragma pack(pop)
 
+#pragma pack(push, 1)
+  struct PackedKeypoint {
+    // Helper structure that stores the name of a bone
+    // (up to 24 chars) and its position (a float 3)
+    PackedKeypoint() = default;
+
+    char name[24];
+    float location[3];
+  };
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+struct PackedKeypoints {
+  // Helper class that stores up to 72 keypoints (yeah it's quite heavy,
+  // This is 2kB right there...)
+
+  PackedKeypoints() = default;
+  PackedKeypoint keypoints[72];
+  int count=0;
+
+
+  void addKeypoint(std::string name, float x, float y, float z){
+      if (count >= 72){
+          return;
+      }
+      strncpy(keypoints[count].name, name.c_str(), sizeof(keypoints[count]));
+      keypoints[count].location[0] = x;
+      keypoints[count].location[1] = y;
+      keypoints[count].location[2] = z;
+      count ++;
+  }
+
+  operator rpc::Keypoints() const {
+      rpc::Keypoints kps;
+      for (int i=0; i<count; i++)
+      {
+          geom::Vector3D v(keypoints[i].location[0], keypoints[i].location[1],
+                     keypoints[i].location[2]);
+          std::string name = std::string(keypoints[i].name);
+          std::pair<std::string, geom::Vector3D> pair1(name, v);
+          kps.keypoints.push_back(pair1);
+      }
+    return kps;
+  };
+
+};
+#pragma pack(pop)
+
 
 } // namespace detail
 
@@ -128,12 +177,7 @@ namespace detail {
       detail::PackedWalkerControl walker_control;
     } state;
 
-    union Keypoints {
-      rpc::WalkerKeypoints walker_key_points;
-      detail::VehicleData vehicle_key_points;
-
-      Keypoints() {}
-    } keypoints;
+    detail::PackedKeypoints keypoints;
 
   };
 
