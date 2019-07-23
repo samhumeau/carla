@@ -14,11 +14,14 @@
 #include "EngineUtils.h"
 #include "PhysicsEngine/PhysicsAsset.h"
 
+
 template <typename T>
 static auto CastEnum(T label)
 {
   return static_cast<typename std::underlying_type<T>::type>(label);
 }
+
+#define CARLA_TAGGER_EXTRA_LOG 1
 
 static ECityObjectLabel GetLabelByFolderName(const FString &String) {
   if      (String == "Buildings")       return ECityObjectLabel::Buildings;
@@ -45,14 +48,39 @@ static ECityObjectLabel GetLabelByPath(const T *Object)
   return (StringArray.Num() > 4 ? GetLabelByFolderName(StringArray[4]) : ECityObjectLabel::None);
 }
 
+unsigned int SimpleHash(unsigned int x, unsigned int cap) {
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = (x >> 16) ^ x;
+    return x % cap;
+}
+
 static void SetStencilValue(
-    UPrimitiveComponent &Component,
-    const ECityObjectLabel &Label,
-    const bool bSetRenderCustomDepth) {
-  Component.SetCustomDepthStencilValue(CastEnum(Label));
-  Component.SetRenderCustomDepth(
-      bSetRenderCustomDepth &&
-      (Label != ECityObjectLabel::None));
+      UPrimitiveComponent &Component,
+      const ECityObjectLabel &Label,
+      const bool bSetRenderCustomDepth,
+      const uint32 id
+    ) {
+    uint8 StencilValue = CastEnum(Label);
+    if (Label == ECityObjectLabel::Pedestrians){
+      StencilValue += 16 + SimpleHash(id, 112);
+      #ifdef CARLA_TAGGER_EXTRA_LOG
+        UE_LOG(LogCarla, Log, TEXT("Pedestrian"));
+      #endif // CARLA_TAGGER_EXTRA_LOG
+    }
+    if (Label == ECityObjectLabel::Vehicles){
+      StencilValue += 128 + SimpleHash(id, 112);
+      #ifdef CARLA_TAGGER_EXTRA_LOG
+        UE_LOG(LogCarla, Log, TEXT("Vehicle"));
+      #endif // CARLA_TAGGER_EXTRA_LOG
+    }
+    #ifdef CARLA_TAGGER_EXTRA_LOG
+      UE_LOG(LogCarla, Log, TEXT("setuped"));
+    #endif // CARLA_TAGGER_EXTRA_LOG
+    Component.SetCustomDepthStencilValue(StencilValue);
+    Component.SetRenderCustomDepth(
+        bSetRenderCustomDepth &&
+        (Label != ECityObjectLabel::None));
 }
 
 // =============================================================================
@@ -70,21 +98,21 @@ void ATagger::TagActor(const AActor &Actor, bool bTagForSemanticSegmentation)
   Actor.GetComponents<UStaticMeshComponent>(StaticMeshComponents);
   for (UStaticMeshComponent *Component : StaticMeshComponents) {
     const auto Label = GetLabelByPath(Component->GetStaticMesh());
-    SetStencilValue(*Component, Label, bTagForSemanticSegmentation);
+    SetStencilValue(*Component, Label, bTagForSemanticSegmentation, Actor.GetUniqueID());
 #ifdef CARLA_TAGGER_EXTRA_LOG
     UE_LOG(LogCarla, Log, TEXT("  + StaticMeshComponent: %s"), *Component->GetName());
     UE_LOG(LogCarla, Log, TEXT("    - Label: \"%s\""), *GetTagAsString(Label));
 #endif // CARLA_TAGGER_EXTRA_LOG
   }
 
-  // Iterate skeletal meshes.
-  TArray<USkeletalMeshComponent *> SkeletalMeshComponents;
-  Actor.GetComponents<USkeletalMeshComponent>(SkeletalMeshComponents);
-  for (USkeletalMeshComponent *Component : SkeletalMeshComponents) {
+  // Iterate over any fucking mesh we can fucking find
+  TArray<USkinnedMeshComponent *> SkinnedMeshComponents;
+  Actor.GetComponents<USkinnedMeshComponent>(SkinnedMeshComponents);
+  for (USkinnedMeshComponent *Component : SkinnedMeshComponents) {
     const auto Label = GetLabelByPath(Component->GetPhysicsAsset());
-    SetStencilValue(*Component, Label, bTagForSemanticSegmentation);
+    SetStencilValue(*Component, Label, bTagForSemanticSegmentation, Actor.GetUniqueID());
 #ifdef CARLA_TAGGER_EXTRA_LOG
-    UE_LOG(LogCarla, Log, TEXT("  + SkeletalMeshComponent: %s"), *Component->GetName());
+    UE_LOG(LogCarla, Log, TEXT("  + SkinnedMeshComponent: %s"), *Component->GetName());
     UE_LOG(LogCarla, Log, TEXT("    - Label: \"%s\""), *GetTagAsString(Label));
 #endif // CARLA_TAGGER_EXTRA_LOG
   }
